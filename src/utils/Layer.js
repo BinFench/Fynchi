@@ -10,14 +10,14 @@ export default class Layer {
     }
 
     addPrev(layer) {
-        const ids = [...(this.prev).id];
+        const ids = this.prev.map(el => el.id);
         if (ids.indexOf(layer.id) === -1) {
             this.prev.push(layer);
         }
     }
 
     addNext(layer) {
-        const ids = [...(this.next).id];
+        const ids = this.next.map(el => el.id);
         if (ids.indexOf(layer.id) === -1) {
             this.next.push(layer);
         }

@@ -19,10 +19,10 @@ export default class Model {
 
         this.layers = this.layers.map(item => {
             item.next.forEach(element => {
-               if (element.id === id) {
-                   layer.addPrev(element);
-                   item.addNext(layer);
-               } 
+                if (element.id === id) {
+                    layer.addPrev(element);
+                    item.addNext(layer);
+                }
             });
             return item;
         });
@@ -36,7 +36,7 @@ export default class Model {
         if (ini !== -1) {
             this.input.push(layer);
         }
-        if (outi !== -1)  {
+        if (outi !== -1) {
             this.output.push(layer);
         }
     }
@@ -64,16 +64,16 @@ export default class Model {
 
         if (ini !== -1) {
             layer.next.forEach(next => {
-                if (next.prev.length === 0 && 
+                if (next.prev.length === 0 &&
                     outIDs.indexOf(next.id) === -1 &&
                     inIDs.indexOf(next.id) === -1) {
                     this.input.push(next);
                 }
             });
         }
-        if (outi !== -1)  {
+        if (outi !== -1) {
             layer.prev.forEach(prev => {
-                if (prev.next.length === 0 && 
+                if (prev.next.length === 0 &&
                     outIDs.indexOf(prev.id) === -1 &&
                     inIDs.indexOf(prev.id) === -1) {
                     this.output.push(prev);
@@ -104,7 +104,7 @@ export default class Model {
                 return true;
             }
         }
-        return false; 
+        return false;
     }
 
     addInput(layer) {
@@ -122,6 +122,31 @@ export default class Model {
             ini === -1) {
             this.output.push(this.layers[layerNum]);
         }
+    }
+
+    outNotMax(max) {
+        let toRet = false;
+        this.layers.forEach(layer => {
+            if (!toRet) {
+                if (layer.maxDist > max) {
+                    toRet = true;
+                }
+                if (layer.maxDist === max) {
+                    if (!toRet) {
+                        let match = false;
+                        this.output.forEach(out => {
+                            if (layer.id === out.id) {
+                                match = true;
+                            }
+                        });
+                        if (!match) {
+                            toRet = true;
+                        }
+                    }
+                }
+            }
+        });
+        return toRet;
     }
 
     render() {
@@ -144,9 +169,16 @@ export default class Model {
             this.renderOrder.push([]);
         }
 
+        const outputNM = this.outNotMax(max);
         this.output.forEach(i => {
             i.maxDist = max;
+            if (outputNM) {
+                i.maxDist += 1;
+            }
         });
+        if (outputNM) {
+            this.renderOrder.push([]);
+        }
 
         this.layers.forEach(i => {
             this.renderOrder[i.maxDist].push(i);
