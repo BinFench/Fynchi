@@ -1,18 +1,13 @@
 import React from 'react';
 import Model from '../utils/Model';
 import Layer from '../utils/Layer';
-import { findAllByText } from '@testing-library/react';
 
-const getPos = (index, i, length, maxx, maxy, w, h) => {
+const getPos = (index, i, length, max) => {
   const minx = 100 * index;
   const height = 200 * length - 100;
-  const y = (100 * (2 * maxy - 1) - height) / 2;
+  const y = (100 * (2 * max - 1) - height) / 2;
   const miny = 200 * i + y;
-  const offx = (w - 50 * (2 * maxx - 1)) / 2;
-  const offy = (h - 100 * (2 * maxy - 1)) / 2;
-  const retx = minx + offx;
-  const rety = miny + offy;
-  return { x: retx, y: rety };
+  return { x: minx, y: miny };
 }
 
 const pointAboveLine = (slope, base, x, y) => {
@@ -33,6 +28,18 @@ const pointBetweenLine = (l0, l1, p) => {
 
   return (pointAboveLine(perp, b0, p.x, p.y) + pointAboveLine(perp, b1, p.x, p.y))
     === 1;
+}
+
+const rectOverlap = (l1, r1, l2, r2) => {
+  if (l1.x >= r2.x || l2.x >= r1.x) {
+    return false;
+  }
+
+  if (l1.y >= r2.y || l2.y >= r1.y) {
+    return false;
+  }
+
+  return true;
 }
 
 const rectContainsPoint = (p, r, w, h) => {
@@ -61,6 +68,8 @@ export default class ModelDesigner extends React.Component {
       zoomheight: props.height,
       x: 0,
       y: 0,
+      minx: 0,
+      miny: 0,
       model: new Model([new Layer({
         type: 'input',
         units: 4
@@ -96,13 +105,18 @@ export default class ModelDesigner extends React.Component {
     const ratio = width / height;
     if (ratio >= this.state.ratio) {
       this.setState({
-        zoomheight: width / this.state.ratio
+        zoomheight: width / this.state.ratio,
+        y: (height - width / this.state.ratio) / 2,
+        miny: (height - width / this.state.ratio) / 2
       });
     } else {
       this.setState({
-        zoomheight: height
+        zoomheight: height,
+        x: (width - height * this.state.ratio) / 2,
+        minx: (width - height * this.state.ratio) / 2
       });
     }
+
   }
 
   draw() {
@@ -110,8 +124,10 @@ export default class ModelDesigner extends React.Component {
     const height = this.state.zoomheight / this.state.zoomPerc;
 
     const ctx = this.state.ctx;
+    ctx.clearRect(0, 0, (this.state.width), (this.state.height));
+    ctx.beginPath();
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, this.state.width, this.state.height);
+    ctx.fillRect(0, 0, (this.state.width), (this.state.height));
     // Determine what model layers/connections will need to be drawn
     const renderOrder = this.state.model.renderOrder;
 
@@ -127,7 +143,7 @@ export default class ModelDesigner extends React.Component {
 
     const toRender = renderOrder.map((item, index, arr) => {
       return item.filter((element, i) => {
-        const pos = getPos(index, i, item.length, renderOrder.length, max, width, height);
+        const pos = getPos(index, i, item.length, max);
         return this.layerFits(pos)
           || this.connectionFits(element, pos, arr, index, max);
       });
@@ -149,7 +165,7 @@ export default class ModelDesigner extends React.Component {
             }
           });
         }
-        this.drawNet(this.getCoords(getPos(i, index + j, size, renderOrder.length, max, width, height)), conn, max, width, height);
+        this.drawNet(this.getCoords(getPos(i, index + j, size, max)), conn, max, width, height);
       });
     });
   }
@@ -165,8 +181,11 @@ export default class ModelDesigner extends React.Component {
     const width = this.state.ratio * this.state.zoomheight / this.state.zoomPerc;
     const height = this.state.zoomheight / this.state.zoomPerc;
 
-    return ((minx >= x && minx <= x + width) || (maxx >= x && maxx <= x + width))
-      && ((miny >= y && miny <= y + height) || (maxy >= y && maxy <= y + height));
+    return rectOverlap(
+      { x: minx, y: miny },
+      { x: maxx, y: maxy },
+      { x: x, y: y },
+      { x: x + width, y: y + height });
   }
 
   connectionFits(element, pos, renderOrder, index, max) {
@@ -185,8 +204,8 @@ export default class ModelDesigner extends React.Component {
         for (let i = index + 1; i <= renderOrder.length; i++) {
           if (!toRet) {
             renderOrder[i].forEach((elem, j) => {
-              if (!toRet && elem.id == id) {
-                const pos2 = getPos(i, j, renderOrder[i].length, renderOrder.length, max, width, height);
+              if (!toRet && elem.id === id) {
+                const pos2 = getPos(i, j, renderOrder[i].length, max);
                 const x1 = pos2.x;
                 const y1 = pos2.y + 50;
                 const slope = (y1 - y0) / (x1 - x0);
@@ -230,11 +249,11 @@ export default class ModelDesigner extends React.Component {
     const renderOrder = this.state.model.renderOrder;
     const ctx = this.state.ctx;
     ctx.fillStyle = '#000000';
-    ctx.rect(pos.rx, pos.ry, pos.cx - pos.rx, 2 * (pos.cy - pos.ry));
+    ctx.rect((pos.rx), (pos.ry), (pos.cx - pos.rx), (2 * (pos.cy - pos.ry)));
     ctx.stroke();
     layer.next.forEach((item) => {
       ctx.beginPath();
-      ctx.moveTo(pos.cx, pos.cy);
+      ctx.moveTo((pos.cx), (pos.cy));
       const id = item.id;
       let indexx = -1;
       let indexy = -1;
@@ -248,8 +267,8 @@ export default class ModelDesigner extends React.Component {
           });
         }
       });
-      const conpos = this.getCoords(getPos(indexx, indexy, renderOrder[indexx].length, renderOrder.length, max, w, h));
-      ctx.lineTo(conpos.rx, conpos.cy);
+      const conpos = this.getCoords(getPos(indexx, indexy, renderOrder[indexx].length, max));
+      ctx.lineTo((conpos.rx), (conpos.cy));
       ctx.stroke();
     });
   }
@@ -262,10 +281,88 @@ export default class ModelDesigner extends React.Component {
       ctx: ctx
     });
     this.initialDraw();
+    canvas.addEventListener('mousedown', this.onMouseDown());
+    canvas.addEventListener('mouseup', this.onMouseUp());
+    canvas.addEventListener('mousemove', e => this.onMouseMove(e));
+    canvas.addEventListener('wheel', e => this.onScroll(e));
+    canvas.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      return false;
+    });
   }
 
   componentDidUpdate() {
     this.draw();
+  }
+
+  onMouseDown(e) {
+  }
+
+  onMouseUp(e) {
+  }
+
+  onMouseMove(e) {
+    // const rect = this.state.canvas.getBoundingClientRect();
+    // const mousex = e.clientX - rect.left;
+    // const mousey = e.clientY - rect.top;
+    // console.log(mousex, mousey);
+  }
+
+  onScroll(e) {
+    let isZooming = false;
+    if (e.deltaY < 0) {
+      isZooming = true;
+    }
+    let zoomperc = this.state.zoomPerc;
+
+    if (isZooming) {
+      zoomperc *= 1.1;
+    } else {
+      zoomperc = Math.max(1, zoomperc / 1.1);
+    }
+
+    const maxX = this.state.ratio * this.state.zoomheight;
+    const maxY = this.state.zoomheight;
+    const x = this.state.x // x position of top left of view rectangle in units
+    const y = this.state.y // y position of top left of view rectangle in units
+    const width = maxX / this.state.zoomPerc;
+    const height = maxY / this.state.zoomPerc;
+
+    const rect = this.state.canvas.getBoundingClientRect();
+    const mousex = e.clientX - rect.left;
+    const mousey = e.clientY - rect.top;
+
+    const pos = {
+      x: x + (mousex / this.state.width) * width,
+      y: y + (mousey / this.state.height) * height
+    };
+
+    // adjust x, y so that pos is at the mouse position after zooming
+    const newWidth = maxX / zoomperc;
+    const newHeight = maxY / zoomperc;
+    const newX = x + pos.x - ((mousex / this.state.width) * newWidth + x);
+    const newY = y + pos.y - ((mousey / this.state.height) * newHeight + y);
+
+    let setX = newX;
+    let setY = newY;
+
+    if (setX < this.state.minx) {
+      setX = this.state.minx;
+    } else if (setX + newWidth > this.state.minx + maxX) {
+      setX = this.state.minx + maxX - newWidth;
+    }
+
+    if (setY < this.state.miny) {
+      setY = this.state.miny;
+    } else if (setY + newHeight > this.state.miny + maxY) {
+      setY = this.state.miny + maxY - newHeight;
+    }
+
+    this.setState({
+      zoomPerc: zoomperc,
+      x: setX,
+      y: setY
+    });
   }
 
   render() {

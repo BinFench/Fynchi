@@ -4,6 +4,12 @@ export default class Model {
         this.output = output;
         this.layers = [...input, ...output];
         this.renderOrder = [];
+        // this.input.forEach(i => {
+        //     this.output.forEach(o => {
+        //         i.addNext(o);
+        //         o.addPrev(i);
+        //     })
+        // });
     }
 
     addNext(layerNum, layer) {
