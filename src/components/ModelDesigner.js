@@ -2,6 +2,9 @@ import React from 'react';
 import Model from '../utils/Model';
 import Layer from '../utils/Layer';
 
+const rcx = 100;
+const rcy = 100;
+
 const getPos = (index, i, length, max) => {
   const minx = 100 * index;
   const height = 200 * length - 100;
@@ -61,6 +64,7 @@ export default class ModelDesigner extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
+      // Viewing state elements
       zoomPerc: 1.0,
       width: props.width,
       height: props.height,
@@ -70,9 +74,14 @@ export default class ModelDesigner extends React.Component {
       y: 0,
       minx: 0,
       miny: 0,
+      // Control state elements
       leftClick: false,
       posX: 0,
       posY: 0,
+      rightClick: false,
+      rx: 0,
+      ry: 0,
+      // Model state elements
       model: new Model([new Layer({
         type: 'input',
         units: 4
@@ -80,7 +89,7 @@ export default class ModelDesigner extends React.Component {
         type: 'dense',
         units: 4
       })]),
-
+      // Canvas state elements
       canvas: null,
       ctx: null
     };
@@ -171,6 +180,11 @@ export default class ModelDesigner extends React.Component {
         this.drawNet(this.getCoords(getPos(i, index + j, size, max)), conn, max, width, height);
       });
     });
+
+    // If the right click menu is up, draw it
+    if (this.state.rightClick) {
+      this.drawRCMenu();
+    }
   }
 
   layerFits(pos) {
@@ -204,7 +218,7 @@ export default class ModelDesigner extends React.Component {
     element.next.forEach(item => {
       if (!toRet) {
         const id = item.id;
-        for (let i = index + 1; i <= renderOrder.length; i++) {
+        for (let i = index + 1; i < renderOrder.length; i++) {
           if (!toRet) {
             renderOrder[i].forEach((elem, j) => {
               if (!toRet && elem.id === id) {
@@ -276,6 +290,14 @@ export default class ModelDesigner extends React.Component {
     });
   }
 
+  drawRCMenu() {
+    const canvas = this.refs.modelView;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(this.state.rx, this.state.ry, rcx, rcy);
+    ctx.stroke();
+  }
+
   componentDidMount() {
     const canvas = this.refs.modelView;
     const ctx = canvas.getContext('2d');
@@ -314,10 +336,29 @@ export default class ModelDesigner extends React.Component {
     };
 
     if (e.button === 0) {
+      if (this.state.rightClick) {
+        if (mousex >= this.state.rx
+          && mousex <= this.state.rx + rcx
+          && mousey >= this.state.ry
+          && mousey <= this.state.ry + rcy) {
+
+        } else {
+          this.setState({
+            rightClick: false
+          })
+        }
+      }
       this.setState({
         leftClick: true,
         posX: pos.x,
         posY: pos.y
+      });
+    }
+    if (e.button === 2) {
+      this.setState({
+        rightClick: true,
+        rx: mousex,
+        ry: mousey
       });
     }
   }
