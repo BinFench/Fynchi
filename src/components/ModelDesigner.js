@@ -70,6 +70,9 @@ export default class ModelDesigner extends React.Component {
       y: 0,
       minx: 0,
       miny: 0,
+      leftClick: false,
+      posX: 0,
+      posY: 0,
       model: new Model([new Layer({
         type: 'input',
         units: 4
@@ -281,8 +284,8 @@ export default class ModelDesigner extends React.Component {
       ctx: ctx
     });
     this.initialDraw();
-    canvas.addEventListener('mousedown', this.onMouseDown());
-    canvas.addEventListener('mouseup', this.onMouseUp());
+    canvas.addEventListener('mousedown', e => this.onMouseDown(e));
+    canvas.addEventListener('mouseup', e => this.onMouseUp(e));
     canvas.addEventListener('mousemove', e => this.onMouseMove(e));
     canvas.addEventListener('wheel', e => this.onScroll(e));
     canvas.addEventListener('contextmenu', e => {
@@ -296,16 +299,73 @@ export default class ModelDesigner extends React.Component {
   }
 
   onMouseDown(e) {
+    const maxX = this.state.ratio * this.state.zoomheight;
+    const maxY = this.state.zoomheight;
+    const x = this.state.x // x position of top left of view rectangle in units
+    const y = this.state.y // y position of top left of view rectangle in units
+    const width = maxX / this.state.zoomPerc;
+    const height = maxY / this.state.zoomPerc;
+    const rect = this.state.canvas.getBoundingClientRect();
+    const mousex = e.clientX - rect.left;
+    const mousey = e.clientY - rect.top;
+    const pos = {
+      x: x + (mousex / this.state.width) * width,
+      y: y + (mousey / this.state.height) * height
+    };
+
+    if (e.button === 0) {
+      this.setState({
+        leftClick: true,
+        posX: pos.x,
+        posY: pos.y
+      });
+    }
   }
 
   onMouseUp(e) {
+    if (e.button === 0) {
+      this.setState({
+        leftClick: false
+      });
+    }
   }
 
   onMouseMove(e) {
-    // const rect = this.state.canvas.getBoundingClientRect();
-    // const mousex = e.clientX - rect.left;
-    // const mousey = e.clientY - rect.top;
-    // console.log(mousex, mousey);
+    if (this.state.leftClick) {
+      const maxX = this.state.ratio * this.state.zoomheight;
+      const maxY = this.state.zoomheight;
+      const x = this.state.x // x position of top left of view rectangle in units
+      const y = this.state.y // y position of top left of view rectangle in units
+      const width = maxX / this.state.zoomPerc;
+      const height = maxY / this.state.zoomPerc;
+      const rect = this.state.canvas.getBoundingClientRect();
+      const mousex = e.clientX - rect.left;
+      const mousey = e.clientY - rect.top;
+      const pos = {
+        x: x + (mousex / this.state.width) * width,
+        y: y + (mousey / this.state.height) * height
+      };
+
+      let newX = x - pos.x + this.state.posX;
+      let newY = y - pos.y + this.state.posY;
+
+      if (newX < this.state.minx) {
+        newX = this.state.minx;
+      } else if (newX + width > this.state.minx + maxX) {
+        newX = this.state.minx + maxX - width;
+      }
+
+      if (newY < this.state.miny) {
+        newY = this.state.miny;
+      } else if (newY + height > this.state.miny + maxY) {
+        newY = this.state.miny + maxY - height;
+      }
+
+      this.setState({
+        x: newX,
+        y: newY
+      });
+    }
   }
 
   onScroll(e) {
