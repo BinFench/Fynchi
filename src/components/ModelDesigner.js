@@ -10,7 +10,7 @@ const getPos = (index, i, length, max) => {
   const height = 200 * length - 100;
   const y = (100 * (2 * max - 1) - height) / 2;
   const miny = 200 * i + y;
-  return { x: minx, y: miny };
+  return { x: minx + 25, y: miny + 25 };
 }
 
 const pointAboveLine = (slope, base, x, y) => {
@@ -60,6 +60,10 @@ const lineContainsRect = (l0, l1, r, w, h) => {
     || pointBetweenLine(l0, l1, { x: r.x + w, y: r.y + h });
 }
 
+const isDist = (p1, p2, r) => {
+  return (Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2)) <= r);
+}
+
 export default class ModelDesigner extends React.Component {
   constructor(props) {
     super(props);
@@ -95,6 +99,17 @@ export default class ModelDesigner extends React.Component {
     };
   }
 
+  coordsToPos(coords) {
+    const x = this.state.x // x position of top left of view rectangle in units
+    const y = this.state.y // y position of top left of view rectangle in units
+    const width = this.state.ratio * this.state.zoomheight / this.state.zoomPerc;
+    const height = this.state.zoomheight / this.state.zoomPerc;
+    return {
+      x: width * coords.rx / this.state.width + x + 25,
+      y: height * coords.ry / this.state.height + y + 25
+    }
+  }
+
   initialDraw() {
     const toDraw = this.state.model;
     toDraw.render();
@@ -111,8 +126,10 @@ export default class ModelDesigner extends React.Component {
       }
     });
 
-    height = 100 * (2 * height - 1); //100 units per layer + 100 between each layer
-    width = 50 * (2 * width - 1); //50 units per layer + 50 between each layer
+    // 100 units per layer + 100 between each layer + 25 unit offset on either side
+    height = 100 * (2 * height - 1) + 50;
+    // 50 units per layer + 50 between each layer + 25 unit offset on either side
+    width = 100 * width;
 
     const ratio = width / height;
     if (ratio >= this.state.ratio) {
@@ -128,13 +145,9 @@ export default class ModelDesigner extends React.Component {
         minx: (width - height * this.state.ratio) / 2
       });
     }
-
   }
 
   draw() {
-    const width = this.state.ratio * this.state.zoomheight / this.state.zoomPerc;
-    const height = this.state.zoomheight / this.state.zoomPerc;
-
     const ctx = this.state.ctx;
     ctx.clearRect(0, 0, (this.state.width), (this.state.height));
     ctx.beginPath();
@@ -177,7 +190,7 @@ export default class ModelDesigner extends React.Component {
             }
           });
         }
-        this.drawNet(this.getCoords(getPos(i, index + j, size, max)), conn, max, width, height);
+        this.drawNet(this.getCoords(getPos(i, index + j, size, max)), conn, max);
       });
     });
 
@@ -262,7 +275,7 @@ export default class ModelDesigner extends React.Component {
     return { rx: rx, ry: ry, cx: cx, cy: cy };
   }
 
-  drawNet(pos, layer, max, w, h) {
+  drawNet(pos, layer, max) {
     const renderOrder = this.state.model.renderOrder;
     const ctx = this.state.ctx;
     ctx.fillStyle = '#000000';
@@ -288,6 +301,9 @@ export default class ModelDesigner extends React.Component {
       ctx.lineTo((conpos.rx), (conpos.cy));
       ctx.stroke();
     });
+    if (layer.renderOptions) {
+      this.drawOptions(this.coordsToPos(pos));
+    }
   }
 
   drawRCMenu() {
@@ -295,6 +311,32 @@ export default class ModelDesigner extends React.Component {
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#000000';
     ctx.fillRect(this.state.rx, this.state.ry, rcx, rcy);
+    ctx.stroke();
+  }
+
+  drawOptions(pos) {
+    const deleteCircle = this.getCoords({ x: pos.x, y: pos.y - 37.5 });
+    const nextCircle = this.getCoords({ x: pos.x + 37.5, y: pos.y });
+    const adjacentCircle = this.getCoords({ x: pos.x + 37.5, y: pos.y + 50 });
+    //const radius = 12.5 * this.state.zoomPerc * this.state.height / this.state.zoomheight;
+    const radius = 40;
+    const canvas = this.refs.modelView;
+    const ctx = canvas.getContext('2d');
+
+    ctx.beginPath();
+    ctx.arc(deleteCircle.rx, deleteCircle.ry, radius, 0, 2 * Math.PI, false);
+    ctx.fillStyle = '#000000';
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(nextCircle.rx, nextCircle.ry, radius, 0, 2 * Math.PI, false);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(adjacentCircle.rx, adjacentCircle.ry, radius, 0, 2 * Math.PI, false);
+    ctx.fill();
     ctx.stroke();
   }
 
@@ -318,6 +360,16 @@ export default class ModelDesigner extends React.Component {
 
   componentDidUpdate() {
     this.draw();
+  }
+
+  mouseOnOption(mpos, rpos) {
+    const deleteCircle = { x: rpos.x + 25, y: rpos.y - 12.5 };
+    const nextCircle = { x: rpos.x + 62.5, y: rpos.y + 25 };
+    const adjacentCircle = { x: rpos.x + 62.5, y: rpos.y + 75 };
+    const radius = 40 * this.state.zoomheight * this.state.zoomPerc / this.state.height;
+    return isDist(mpos, deleteCircle, radius)
+      || isDist(mpos, nextCircle, radius)
+      || isDist(mpos, adjacentCircle, radius);
   }
 
   onMouseDown(e) {
@@ -372,21 +424,21 @@ export default class ModelDesigner extends React.Component {
   }
 
   onMouseMove(e) {
+    this.state.canvas.style.cursor = 'default';
+    const maxX = this.state.ratio * this.state.zoomheight;
+    const maxY = this.state.zoomheight;
+    const x = this.state.x // x position of top left of view rectangle in units
+    const y = this.state.y // y position of top left of view rectangle in units
+    const width = maxX / this.state.zoomPerc;
+    const height = maxY / this.state.zoomPerc;
+    const rect = this.state.canvas.getBoundingClientRect();
+    const mousex = e.clientX - rect.left;
+    const mousey = e.clientY - rect.top;
+    const pos = {
+      x: x + (mousex / this.state.width) * width,
+      y: y + (mousey / this.state.height) * height
+    };
     if (this.state.leftClick) {
-      const maxX = this.state.ratio * this.state.zoomheight;
-      const maxY = this.state.zoomheight;
-      const x = this.state.x // x position of top left of view rectangle in units
-      const y = this.state.y // y position of top left of view rectangle in units
-      const width = maxX / this.state.zoomPerc;
-      const height = maxY / this.state.zoomPerc;
-      const rect = this.state.canvas.getBoundingClientRect();
-      const mousex = e.clientX - rect.left;
-      const mousey = e.clientY - rect.top;
-      const pos = {
-        x: x + (mousex / this.state.width) * width,
-        y: y + (mousey / this.state.height) * height
-      };
-
       let newX = x - pos.x + this.state.posX;
       let newY = y - pos.y + this.state.posY;
 
@@ -406,6 +458,54 @@ export default class ModelDesigner extends React.Component {
         x: newX,
         y: newY
       });
+    } else {
+      const model = this.state.model;
+      let max = 0;
+      model.renderOrder.forEach(i => {
+        if (i.length > max) {
+          max = i.length;
+        }
+      });
+      let selected = false;
+      let prev = { exists: false };
+      let current = { exists: false };
+      model.renderOrder = model.renderOrder.map((layer, index) => {
+        const newLayer = layer.map((node, i) => {
+          const newNode = node;
+          if (node.renderOptions) {
+            prev = { i: index, j: i, exists: true };
+            if (!selected) {
+              current = prev;
+            }
+          }
+          const rectPos = getPos(index, i, layer.length, max);
+          newNode.renderOptions = rectContainsPoint(pos, rectPos, 50, 100);
+          if (newNode.renderOptions) {
+            selected = true;
+            current = { i: index, j: i, exists: true };
+            this.state.canvas.style.cursor = 'pointer';
+          }
+          return newNode;
+        });
+        return newLayer;
+      });
+      if (!selected && prev.exists) {
+        model.renderOrder[prev.i][prev.j].renderOptions = true;
+      }
+      this.setState({
+        model: model
+      });
+      if (current.exists) {
+        if (this.mouseOnOption(pos, getPos(current.i, current.j, model.renderOrder[current.i].length, max))) {
+          this.state.canvas.style.cursor = 'pointer';
+        }
+      }
+    }
+    if (this.state.rightClick) {
+      if (mousex >= this.state.rx && mousex <= this.state.rx + rcx
+        && mousey >= this.state.ry && mousey <= this.state.ry + rcy) {
+        this.state.canvas.style.cursor = 'pointer';
+      }
     }
   }
 

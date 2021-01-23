@@ -7,6 +7,7 @@ export default class Layer {
         this.next = [];
         this.id = __count++;
         this.maxDist = 0;
+        this.renderOptions = false;
     }
 
     addPrev(layer) {
