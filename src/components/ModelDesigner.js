@@ -1,68 +1,10 @@
 import React from 'react';
 import Model from '../utils/Model';
 import Layer from '../utils/Layer';
+import * as Geo from '../utils/Geometry';
 
 const rcx = 100;
 const rcy = 100;
-
-const getPos = (index, i, length, max) => {
-  const minx = 100 * index;
-  const height = 200 * length - 100;
-  const y = (100 * (2 * max - 1) - height) / 2;
-  const miny = 200 * i + y;
-  return { x: minx + 25, y: miny + 25 };
-}
-
-const pointAboveLine = (slope, base, x, y) => {
-  if (y <= slope * x + base) {
-    return 1;
-  }
-  return 0;
-}
-
-const pointBetweenLine = (l0, l1, p) => {
-  if (l0.y === l1.y) {
-    return (p.x >= l0.x && p.x <= l1.x);
-  }
-
-  const perp = -(l1.x - l0.x) / (l1.y - l0.y);
-  const b0 = l0.y - perp * l0.x;
-  const b1 = l1.y - perp * l1.x;
-
-  return (pointAboveLine(perp, b0, p.x, p.y) + pointAboveLine(perp, b1, p.x, p.y))
-    === 1;
-}
-
-const rectOverlap = (l1, r1, l2, r2) => {
-  if (l1.x >= r2.x || l2.x >= r1.x) {
-    return false;
-  }
-
-  if (l1.y >= r2.y || l2.y >= r1.y) {
-    return false;
-  }
-
-  return true;
-}
-
-const rectContainsPoint = (p, r, w, h) => {
-  return ((p.x >= r.x && p.x <= r.x + w) && (p.y >= r.y && p.y <= r.y + h));
-}
-
-const rectContainsLine = (l0, l1, r, w, h) => {
-  return rectContainsPoint(l0, r, w, h) || rectContainsPoint(l1, r, w, h);
-}
-
-const lineContainsRect = (l0, l1, r, w, h) => {
-  return pointBetweenLine(l0, l1, r)
-    || pointBetweenLine(l0, l1, { x: r.x + w, y: r.y })
-    || pointBetweenLine(l0, l1, { x: r.x, y: r.y + h })
-    || pointBetweenLine(l0, l1, { x: r.x + w, y: r.y + h });
-}
-
-const isDist = (p1, p2, r) => {
-  return (Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2)) <= r);
-}
 
 export default class ModelDesigner extends React.Component {
   constructor(props) {
@@ -70,21 +12,13 @@ export default class ModelDesigner extends React.Component {
     this.state = {
       // Viewing state elements
       zoomPerc: 1.0,
-      width: props.width,
-      height: props.height,
+      width: props.width, height: props.height,
       ratio: props.width / props.height,
       zoomheight: props.height,
-      x: 0,
-      y: 0,
-      minx: 0,
-      miny: 0,
+      x: 0, y: 0, minx: 0, miny: 0,
       // Control state elements
-      leftClick: false,
-      posX: 0,
-      posY: 0,
-      rightClick: false,
-      rx: 0,
-      ry: 0,
+      leftClick: false, posX: 0, posY: 0,
+      rightClick: false, rx: 0, ry: 0,
       // Model state elements
       model: new Model([new Layer({
         type: 'input',
@@ -94,8 +28,7 @@ export default class ModelDesigner extends React.Component {
         units: 4
       })]),
       // Canvas state elements
-      canvas: null,
-      ctx: null
+      canvas: null, ctx: null
     };
   }
 
@@ -113,17 +46,12 @@ export default class ModelDesigner extends React.Component {
   initialDraw() {
     const toDraw = this.state.model;
     toDraw.render();
-
-    this.setState({
-      model: toDraw
-    });
+    this.setState({ model: toDraw });
 
     let width = toDraw.renderOrder.length;
     let height = 0;
     toDraw.renderOrder.forEach(item => {
-      if (item.length > height) {
-        height = item.length;
-      }
+      if (item.length > height) height = item.length;
     });
 
     // 100 units per layer + 100 between each layer + 25 unit offset on either side
@@ -158,9 +86,7 @@ export default class ModelDesigner extends React.Component {
 
     let max = 0;
     renderOrder.forEach(i => {
-      if (i.length > max) {
-        max = i.length;
-      }
+      if (i.length > max) max = i.length;
     })
 
     // We map to isolate the horizontally visible connections, then filter out
@@ -168,7 +94,7 @@ export default class ModelDesigner extends React.Component {
 
     const toRender = renderOrder.map((item, index, arr) => {
       return item.filter((element, i) => {
-        const pos = getPos(index, i, item.length, max);
+        const pos = Geo.getPos(index, i, item.length, max);
         return this.layerFits(pos)
           || this.connectionFits(element, pos, arr, index, max);
       });
@@ -178,26 +104,20 @@ export default class ModelDesigner extends React.Component {
     toRender.forEach((layer, i) => {
       let index = -1;
       const size = renderOrder[i].length;
-      if (size === layer.length) {
-        index = 0;
-      }
+      if (size === layer.length)  index = 0;
       layer.forEach((conn, j) => {
         if (index === -1) {
           const id = conn.id;
           renderOrder[i].forEach((match, k) => {
-            if (match.id === id) {
-              index = k;
-            }
+            if (match.id === id) index = k;
           });
         }
-        this.drawNet(this.getCoords(getPos(i, index + j, size, max)), conn, max);
+        this.drawNet(this.getCoords(Geo.getPos(i, index + j, size, max)), conn, max);
       });
     });
 
     // If the right click menu is up, draw it
-    if (this.state.rightClick) {
-      this.drawRCMenu();
-    }
+    if (this.state.rightClick) this.drawRCMenu();
   }
 
   layerFits(pos) {
@@ -211,7 +131,7 @@ export default class ModelDesigner extends React.Component {
     const width = this.state.ratio * this.state.zoomheight / this.state.zoomPerc;
     const height = this.state.zoomheight / this.state.zoomPerc;
 
-    return rectOverlap(
+    return Geo.rectOverlap(
       { x: minx, y: miny },
       { x: maxx, y: maxy },
       { x: x, y: y },
@@ -235,20 +155,20 @@ export default class ModelDesigner extends React.Component {
           if (!toRet) {
             renderOrder[i].forEach((elem, j) => {
               if (!toRet && elem.id === id) {
-                const pos2 = getPos(i, j, renderOrder[i].length, max);
+                const pos2 = Geo.getPos(i, j, renderOrder[i].length, max);
                 const x1 = pos2.x;
                 const y1 = pos2.y + 50;
                 const slope = (y1 - y0) / (x1 - x0);
                 const base = y0 - slope * x0;
                 let count = 0;
-                count += pointAboveLine(slope, base, x, y);
-                count += pointAboveLine(slope, base, x + width, y);
-                count += pointAboveLine(slope, base, x, y + height);
-                count += pointAboveLine(slope, base, x + width, y + height);
+                count += Geo.pointAboveLine(slope, base, x, y);
+                count += Geo.pointAboveLine(slope, base, x + width, y);
+                count += Geo.pointAboveLine(slope, base, x, y + height);
+                count += Geo.pointAboveLine(slope, base, x + width, y + height);
                 if (count > 0 && count < 4) {
-                  toRet = rectContainsLine({ x: x0, y: y0 }, { x: x1, y: y1 },
+                  toRet = Geo.rectContainsLine({ x: x0, y: y0 }, { x: x1, y: y1 },
                     { x: x, y: y }, width, height)
-                    || lineContainsRect({ x: x0, y: y0 }, { x: x1, y: y1 },
+                    || Geo.lineContainsRect({ x: x0, y: y0 }, { x: x1, y: y1 },
                       { x: x, y: y }, width, height);
                 }
               }
@@ -290,20 +210,15 @@ export default class ModelDesigner extends React.Component {
       renderOrder.forEach((lay, i) => {
         if (indexx === -1) {
           lay.forEach((el, j) => {
-            if (el.id === id) {
-              indexx = i;
-              indexy = j;
-            }
+            if (el.id === id) { indexx = i; indexy = j; }
           });
         }
       });
-      const conpos = this.getCoords(getPos(indexx, indexy, renderOrder[indexx].length, max));
+      const conpos = this.getCoords(Geo.getPos(indexx, indexy, renderOrder[indexx].length, max));
       ctx.lineTo((conpos.rx), (conpos.cy));
       ctx.stroke();
     });
-    if (layer.renderOptions) {
-      this.drawOptions(this.coordsToPos(pos));
-    }
+    if (layer.renderOptions) this.drawOptions(this.coordsToPos(pos));
   }
 
   drawRCMenu() {
@@ -343,33 +258,25 @@ export default class ModelDesigner extends React.Component {
   componentDidMount() {
     const canvas = this.refs.modelView;
     const ctx = canvas.getContext('2d');
-    this.setState({
-      canvas: canvas,
-      ctx: ctx
-    });
+    this.setState({ canvas: canvas, ctx: ctx });
     this.initialDraw();
     canvas.addEventListener('mousedown', e => this.onMouseDown(e));
     canvas.addEventListener('mouseup', e => this.onMouseUp(e));
     canvas.addEventListener('mousemove', e => this.onMouseMove(e));
     canvas.addEventListener('wheel', e => this.onScroll(e));
-    canvas.addEventListener('contextmenu', e => {
-      e.preventDefault();
-      return false;
-    });
+    canvas.addEventListener('contextmenu', e =>  e.preventDefault());
   }
 
-  componentDidUpdate() {
-    this.draw();
-  }
+  componentDidUpdate() { this.draw(); }
 
   mouseOnOption(mpos, rpos) {
     const deleteCircle = { x: rpos.x + 25, y: rpos.y - 12.5 };
     const nextCircle = { x: rpos.x + 62.5, y: rpos.y + 25 };
     const adjacentCircle = { x: rpos.x + 62.5, y: rpos.y + 75 };
     const radius = 40 * this.state.zoomheight * this.state.zoomPerc / this.state.height;
-    return isDist(mpos, deleteCircle, radius)
-      || isDist(mpos, nextCircle, radius)
-      || isDist(mpos, adjacentCircle, radius);
+    return Geo.isDist(mpos, deleteCircle, radius)
+      || Geo.isDist(mpos, nextCircle, radius)
+      || Geo.isDist(mpos, adjacentCircle, radius);
   }
 
   onMouseDown(e) {
@@ -402,29 +309,25 @@ export default class ModelDesigner extends React.Component {
       }
       this.setState({
         leftClick: true,
-        posX: pos.x,
-        posY: pos.y
+        posX: pos.x, posY: pos.y
       });
     }
     if (e.button === 2) {
       this.setState({
         rightClick: true,
-        rx: mousex,
-        ry: mousey
+        rx: mousex, ry: mousey
       });
     }
   }
 
   onMouseUp(e) {
-    if (e.button === 0) {
-      this.setState({
-        leftClick: false
-      });
-    }
+    if (e.button === 0) this.setState({ leftClick: false });
   }
 
   onMouseMove(e) {
     this.state.canvas.style.cursor = 'default';
+    const minx = this.state.minx;
+    const miny = this.state.miny;
     const maxX = this.state.ratio * this.state.zoomheight;
     const maxY = this.state.zoomheight;
     const x = this.state.x // x position of top left of view rectangle in units
@@ -442,29 +345,18 @@ export default class ModelDesigner extends React.Component {
       let newX = x - pos.x + this.state.posX;
       let newY = y - pos.y + this.state.posY;
 
-      if (newX < this.state.minx) {
-        newX = this.state.minx;
-      } else if (newX + width > this.state.minx + maxX) {
-        newX = this.state.minx + maxX - width;
-      }
+      if (newX < minx) newX = minx;
+      else if (newX + width > minx + maxX) newX = minx + maxX - width;
 
-      if (newY < this.state.miny) {
-        newY = this.state.miny;
-      } else if (newY + height > this.state.miny + maxY) {
-        newY = this.state.miny + maxY - height;
-      }
+      if (newY < miny) newY = miny;
+      else if (newY + height > miny + maxY) newY = miny + maxY - height;
 
-      this.setState({
-        x: newX,
-        y: newY
-      });
+      this.setState({ x: newX, y: newY });
     } else {
       const model = this.state.model;
       let max = 0;
       model.renderOrder.forEach(i => {
-        if (i.length > max) {
-          max = i.length;
-        }
+        if (i.length > max) max = i.length;
       });
       let selected = false;
       let prev = { exists: false };
@@ -474,12 +366,10 @@ export default class ModelDesigner extends React.Component {
           const newNode = node;
           if (node.renderOptions) {
             prev = { i: index, j: i, exists: true };
-            if (!selected) {
-              current = prev;
-            }
+            if (!selected) current = prev;
           }
-          const rectPos = getPos(index, i, layer.length, max);
-          newNode.renderOptions = rectContainsPoint(pos, rectPos, 50, 100);
+          const rectPos = Geo.getPos(index, i, layer.length, max);
+          newNode.renderOptions = Geo.rectContainsPoint(pos, rectPos, 50, 100);
           if (newNode.renderOptions) {
             selected = true;
             current = { i: index, j: i, exists: true };
@@ -492,11 +382,10 @@ export default class ModelDesigner extends React.Component {
       if (!selected && prev.exists) {
         model.renderOrder[prev.i][prev.j].renderOptions = true;
       }
-      this.setState({
-        model: model
-      });
+      this.setState({ model: model });
       if (current.exists) {
-        if (this.mouseOnOption(pos, getPos(current.i, current.j, model.renderOrder[current.i].length, max))) {
+        if (this.mouseOnOption(pos, Geo.getPos(current.i, current.j, 
+          model.renderOrder[current.i].length, max))) {
           this.state.canvas.style.cursor = 'pointer';
         }
       }
@@ -511,17 +400,14 @@ export default class ModelDesigner extends React.Component {
 
   onScroll(e) {
     let isZooming = false;
-    if (e.deltaY < 0) {
-      isZooming = true;
-    }
+    if (e.deltaY < 0) isZooming = true;
     let zoomperc = this.state.zoomPerc;
 
-    if (isZooming) {
-      zoomperc *= 1.1;
-    } else {
-      zoomperc = Math.max(1, zoomperc / 1.1);
-    }
+    if (isZooming) zoomperc *= 1.1;
+    else zoomperc = Math.max(1, zoomperc / 1.1);
 
+    const minx = this.state.minx;
+    const miny = this.state.miny;
     const maxX = this.state.ratio * this.state.zoomheight;
     const maxY = this.state.zoomheight;
     const x = this.state.x // x position of top left of view rectangle in units
@@ -547,22 +433,15 @@ export default class ModelDesigner extends React.Component {
     let setX = newX;
     let setY = newY;
 
-    if (setX < this.state.minx) {
-      setX = this.state.minx;
-    } else if (setX + newWidth > this.state.minx + maxX) {
-      setX = this.state.minx + maxX - newWidth;
-    }
+    if (setX < minx) setX = minx;
+    else if (setX + newWidth > minx + maxX) setX = minx + maxX - newWidth;
 
-    if (setY < this.state.miny) {
-      setY = this.state.miny;
-    } else if (setY + newHeight > this.state.miny + maxY) {
-      setY = this.state.miny + maxY - newHeight;
-    }
+    if (setY < miny) setY = miny;
+    else if (setY + newHeight > miny + maxY) setY = miny + maxY - newHeight;
 
     this.setState({
       zoomPerc: zoomperc,
-      x: setX,
-      y: setY
+      x: setX, y: setY
     });
   }
 
