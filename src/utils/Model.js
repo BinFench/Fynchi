@@ -33,8 +33,10 @@ export default class Model {
             return item;
         });
         this.layers.push(layer);
-        const inIDs = [...(this.input).id];
-        const outIDs = [...(this.output).id];
+        // const inIDs = [...(this.input).id];
+        // const outIDs = [...(this.output).id];
+        const inIDs = this.input.map(inp => inp.id);
+        const outIDs = this.input.map(outp => outp.id);
 
         const ini = inIDs.indexOf(id);
         const outi = outIDs.indexOf(id);
@@ -62,8 +64,10 @@ export default class Model {
             return item;
         });
 
-        const inIDs = [...(this.input).id];
-        const outIDs = [...(this.output).id];
+        // const inIDs = [...(this.input).id];
+        // const outIDs = [...(this.output).id];
+        const inIDs = this.input.map(inp => inp.id);
+        const outIDs = this.input.map(outp => outp.id);
 
         const ini = inIDs.indexOf(layer.id);
         const outi = outIDs.indexOf(layer.id);

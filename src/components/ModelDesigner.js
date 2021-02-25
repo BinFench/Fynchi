@@ -19,6 +19,7 @@ export default class ModelDesigner extends React.Component {
       // Control state elements
       leftClick: false, posX: 0, posY: 0,
       rightClick: false, rx: 0, ry: 0,
+      selected: 'default',
       // Model state elements
       model: new Model([new Layer({
         type: 'input',
@@ -104,7 +105,7 @@ export default class ModelDesigner extends React.Component {
     toRender.forEach((layer, i) => {
       let index = -1;
       const size = renderOrder[i].length;
-      if (size === layer.length)  index = 0;
+      if (size === layer.length) index = 0;
       layer.forEach((conn, j) => {
         if (index === -1) {
           const id = conn.id;
@@ -264,7 +265,7 @@ export default class ModelDesigner extends React.Component {
     canvas.addEventListener('mouseup', e => this.onMouseUp(e));
     canvas.addEventListener('mousemove', e => this.onMouseMove(e));
     canvas.addEventListener('wheel', e => this.onScroll(e));
-    canvas.addEventListener('contextmenu', e =>  e.preventDefault());
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
   }
 
   componentDidUpdate() { this.draw(); }
@@ -277,6 +278,24 @@ export default class ModelDesigner extends React.Component {
     return Geo.isDist(mpos, deleteCircle, radius)
       || Geo.isDist(mpos, nextCircle, radius)
       || Geo.isDist(mpos, adjacentCircle, radius);
+  }
+
+  mouseOnDelete(mpos, rpos) {
+    const deleteCircle = { x: rpos.x + 25, y: rpos.y - 12.5 };
+    const radius = 40 * this.state.zoomheight * this.state.zoomPerc / this.state.height;
+    return Geo.isDist(mpos, deleteCircle, radius);
+  }
+
+  mouseOnNext(mpos, rpos) {
+    const nextCircle = { x: rpos.x + 62.5, y: rpos.y + 25 };
+    const radius = 40 * this.state.zoomheight * this.state.zoomPerc / this.state.height;
+    return Geo.isDist(mpos, nextCircle, radius);
+  }
+
+  mouseOnAdjacent(mpos, rpos) {
+    const adjacentCircle = { x: rpos.x + 62.5, y: rpos.y + 75 };
+    const radius = 40 * this.state.zoomheight * this.state.zoomPerc / this.state.height;
+    return Geo.isDist(mpos, adjacentCircle, radius);
   }
 
   onMouseDown(e) {
@@ -300,13 +319,46 @@ export default class ModelDesigner extends React.Component {
           && mousex <= this.state.rx + rcx
           && mousey >= this.state.ry
           && mousey <= this.state.ry + rcy) {
-
+          // TODO: Implement Right Click Menu
         } else {
           this.setState({
             rightClick: false
           })
         }
       }
+      let max = 0;
+      this.state.model.renderOrder.forEach(layer => {
+        if (layer.length > max) max = layer.length;
+      });
+      this.state.model.renderOrder.forEach((layer, i) => {
+        layer.forEach((node, j) => {
+          if (node.renderOptions) {
+            const rpos = Geo.getPos(i, j, layer.length, max);
+            let ref = 0;
+            this.state.model.layers.forEach((l, index) => {
+              if (l.id == node.id) ref = index;
+            })
+            if (this.mouseOnAdjacent(pos, rpos)) {
+              this.state.model.addAdjacent(ref, new Layer({
+                type: 'dense',
+                units: 4
+              }));
+              this.initialDraw();
+            }
+            if (this.mouseOnDelete(pos, rpos)) {
+              this.state.model.removeLayer(ref);
+              this.initialDraw();
+            }
+            if (this.mouseOnNext(pos, rpos)) {
+              this.state.model.addNext(ref, new Layer({
+                type: 'dense',
+                units: 4
+              }));
+              this.initialDraw();
+            }
+          }
+        });
+      });
       this.setState({
         leftClick: true,
         posX: pos.x, posY: pos.y
@@ -326,6 +378,7 @@ export default class ModelDesigner extends React.Component {
 
   onMouseMove(e) {
     this.state.canvas.style.cursor = 'default';
+    this.setState({ selected: 'default' });
     const minx = this.state.minx;
     const miny = this.state.miny;
     const maxX = this.state.ratio * this.state.zoomheight;
@@ -374,7 +427,28 @@ export default class ModelDesigner extends React.Component {
             selected = true;
             current = { i: index, j: i, exists: true };
             this.state.canvas.style.cursor = 'pointer';
+            this.setState({ selected: 'layer' });
           }
+          newNode.next.forEach(neighbor => {
+            // Find the line that connects these layers, and
+            // determine if mouse is close enough to interact with line
+            let nx = 0;
+            let ny = 0;
+            model.renderOrder.forEach((lay, k) => {
+              lay.forEach((n, l) => {
+                if (n.id === neighbor.id) {
+                  nx = k;
+                  ny = l;
+                }
+              });
+            });
+            const neighborPos = Geo.getPos(nx, ny, model.renderOrder[nx].length, max);
+            const dist = Geo.getMinDistToLine(pos, rectPos, neighborPos, 50, 100);
+            if (dist <= 5 / this.state.zoomPerc) {
+              this.state.canvas.style.cursor = 'pointer';
+              this.setState({ selected: 'connection' });
+            }
+          });
           return newNode;
         });
         return newLayer;
@@ -384,9 +458,10 @@ export default class ModelDesigner extends React.Component {
       }
       this.setState({ model: model });
       if (current.exists) {
-        if (this.mouseOnOption(pos, Geo.getPos(current.i, current.j, 
+        if (this.mouseOnOption(pos, Geo.getPos(current.i, current.j,
           model.renderOrder[current.i].length, max))) {
           this.state.canvas.style.cursor = 'pointer';
+          this.setState({ selected: 'option' });
         }
       }
     }
@@ -394,6 +469,7 @@ export default class ModelDesigner extends React.Component {
       if (mousex >= this.state.rx && mousex <= this.state.rx + rcx
         && mousey >= this.state.ry && mousey <= this.state.ry + rcy) {
         this.state.canvas.style.cursor = 'pointer';
+        this.setState({ selected: 'RC' });
       }
     }
   }

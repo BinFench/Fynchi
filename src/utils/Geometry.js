@@ -56,3 +56,23 @@ export const lineContainsRect = (l0, l1, r, w, h) => {
 export const isDist = (p1, p2, r) => {
   return (Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2)) <= r);
 }
+
+export const getMinDistToLine = (p, r1, r2, w, h) => {
+  const x1 = r1.x + w;
+  const y1 = r1.y + h / 2;
+  const x2 = r2.x;
+  const y2 = r2.y + h / 2;
+  const s1 = (y2 - y1) / (x2 - x1);
+  const b1 = y1 - s1 * x1;
+  let x = p.x;
+  if (s1 != 0) {
+    const s2 = -1 / s1;
+    const b2 = p.y - s2 * p.x;
+    // s1*x + b1 = s2*x + b2, find x
+    x = (b2 - b1) / (s1 - s2);
+  }
+  if (x1 <= x && x2 >= x) {
+    return Math.sqrt(Math.pow(p.x - x, 2) + Math.pow(p.y - (s1 * x + b1), 2));
+  }
+  return Infinity;
+}
